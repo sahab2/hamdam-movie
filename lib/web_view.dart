@@ -110,10 +110,12 @@
 //
 //
 import 'dart:collection';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 // import 'package:vatandar_iran/data/classes/login_suggestion.dart';
 
 // import 'main.dart';
@@ -123,8 +125,7 @@ class WebViewMobileScreen extends StatefulWidget {
   // final bool hasAppBar;
   WebViewMobileScreen();
   @override
-  _WebViewMobileScreenState createState() =>
-      _WebViewMobileScreenState();
+  _WebViewMobileScreenState createState() => _WebViewMobileScreenState();
 }
 
 class _WebViewMobileScreenState extends State<WebViewMobileScreen> {
@@ -141,62 +142,135 @@ class _WebViewMobileScreenState extends State<WebViewMobileScreen> {
   PullToRefreshController? pullToRefreshController;
 
   // late ContextMenu contextMenu;
-  String url = "";
+  // String url = "";
   double progress = 0;
+  bool isConnectionOk = false;
+  bool isLoading = true;
+  String url = "https://hm-pl.waveitoman.net/indexof/";
   final urlController = TextEditingController();
+
+  bool containsMediaFormat(String url) {
+    // Comprehensive list of supported video and audio file extensions
+    final mediaFormats = [
+      // Video formats
+      '.mp4',
+      '.mkv',
+      '.avi',
+      '.mov',
+      '.wmv',
+      '.flv',
+      '.webm',
+      '.3gp',
+      '.m4v',
+      '.ts',
+      '.m2ts',
+      '.mts',
+      '.vob',
+      '.ogv',
+
+      // Audio formats
+      '.mp3',
+      '.wav',
+      '.aac',
+      '.flac',
+      '.ogg',
+      '.wma',
+      '.m4a',
+      '.m4b',
+      '.m4p',
+      '.opus',
+      '.amr',
+      '.aiff',
+      '.alac',
+      '.ape',
+      '.mid', // MIDI
+      '.midi',
+    ];
+
+    // Convert the URL to lowercase to ensure case-insensitive matching
+    final lowerCaseUrl = url.toLowerCase();
+
+    // Check if any of the media formats exist in the URL
+    for (final format in mediaFormats) {
+      if (lowerCaseUrl.endsWith(format)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> showInSnackBar(
+      String value, BuildContext context, int counter) async {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        value,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16.0,
+        ),
+      ),
+      backgroundColor: Colors.red,
+      duration: Duration(seconds: counter),
+    ));
+    await Future.delayed(Duration(seconds: counter));
+    return;
+  }
 
   @override
   void initState() {
     super.initState();
 
-    // contextMenu = ContextMenu(
-    //     menuItems: [
-    //       ContextMenuItem(
-    //           // id: 1,
-    //           title: "Special",
-    //           action: () async {
-    //             print("Menu item Special clicked!");
-    //             print(await webViewController?.getSelectedText());
-    //             await webViewController?.clearFocus();
-    //           })
-    //     ],
-    //     // settings: ContextMenuSettings(hideDefaultSystemContextMenuItems: false),
-    //     onCreateContextMenu: (hitTestResult) async {
-    //       print("onCreateContextMenu");
-    //       print(hitTestResult.extra);
-    //       print(await webViewController?.getSelectedText());
-    //     },
-    //     onHideContextMenu: () {
-    //       print("onHideContextMenu");
-    //     },
-    //     // onContextMenuActionItemClicked: (contextMenuItemClicked) async {
-    //     //   // var id = contextMenuItemClicked.id;
-    //     //   print("onContextMenuActionItemClicked: " +
-    //     //       id.toString() +
-    //     //       " " +
-    //     //       contextMenuItemClicked.title);
-    //     // }
-    //     );
-
+    checkConnection();
     pullToRefreshController = kIsWeb ||
-        ![TargetPlatform.iOS, TargetPlatform.android]
-            .contains(defaultTargetPlatform)
+            ![TargetPlatform.iOS, TargetPlatform.android]
+                .contains(defaultTargetPlatform)
         ? null
         : PullToRefreshController(
-      // settings: PullToRefreshSettings(
-      //   color: Colors.blue,
-      // ),
-      onRefresh: () async {
-        if (defaultTargetPlatform == TargetPlatform.android) {
-          webViewController?.reload();
-        } else if (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.macOS) {
-          webViewController?.loadUrl(
-              urlRequest:
-              URLRequest(url: await webViewController?.getUrl()));
-        }
-      },
-    );
+            // settings: PullToRefreshSettings(
+            //   color: Colors.blue,
+            // ),
+            onRefresh: () async {
+              if (defaultTargetPlatform == TargetPlatform.android) {
+                webViewController?.reload();
+              } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+                  defaultTargetPlatform == TargetPlatform.macOS) {
+                webViewController?.loadUrl(
+                    urlRequest:
+                        URLRequest(url: await webViewController?.getUrl()));
+              }
+            },
+          );
+  }
+
+  checkConnection() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    if (isLoading) {
+      http.Response? response;
+      try {
+        response = await http.get(Uri.parse(url)).timeout(Duration(seconds: 30));
+        setState(() {
+          isLoading = false;
+          print('status code is ${response?.statusCode}');
+          if (response != null && response.statusCode == 200) {
+            isConnectionOk = true;
+          } else {
+            isConnectionOk = false;
+          }
+        });
+      } catch (e) {
+        isConnectionOk = false;
+        setState(() {
+          isLoading = false;
+          isConnectionOk = false;
+        });
+        showInSnackBar(e.toString(), context, 5);
+      }
+    }
   }
 
   @override
@@ -207,17 +281,14 @@ class _WebViewMobileScreenState extends State<WebViewMobileScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: ()async{
-        if(kIsWeb ? false : await webViewController!.canGoBack()) {
+      onWillPop: () async {
+        if (kIsWeb ? false : await webViewController!.canGoBack()) {
           webViewController?.goBack();
           return false;
-        }
-        else {
+        } else {
           // await LoginSuggestion.show(context);
           return true;
         }
-
-
       },
       child: Scaffold(
           // appBar: widget.details.$2.isNotEmpty ? AppBar(
@@ -233,81 +304,131 @@ class _WebViewMobileScreenState extends State<WebViewMobileScreen> {
           //   // actions: [Icon(Icons.arrow_back)],
           // ):null,
           // drawer: myDrawer(context: context),
-          body: SafeArea(
-              child: Column(children: <Widget>[
-                Expanded(
-                  child: Stack(
-                    children: [
-                      InAppWebView(
-                        key: webViewKey,
-                        onPermissionRequest:(controller, origin) async {
-                          return PermissionResponse(action: PermissionResponseAction.GRANT);
-                        },
-                        initialUrlRequest: URLRequest(url: WebUri("https://hm-pl.waveitoman.net/indexof/")),
-                        initialUserScripts: UnmodifiableListView<UserScript>([]),
-                        pullToRefreshController: pullToRefreshController,
-                        onWebViewCreated: (controller) async {
-                          webViewController = controller;
-                        },
-                        onLoadStart: (controller, url) async {
-                          setState(() {
-                            this.url = url.toString();
-                            urlController.text = this.url;
-                          });
-                        },
-                        shouldOverrideUrlLoading:
-                            (controller, navigationAction) async {
-                          final url = await controller.getUrl();
-                          final deepLink = navigationAction.request.url;
-                          if (deepLink != null &&
-                              url != navigationAction.request.url &&
-                              ((deepLink.scheme != 'https' &&
-                                  deepLink.scheme != 'http') ||
-                                  deepLink.toString().contains("external=true"))) {
-                            launchUrl(deepLink,
-                                mode: LaunchMode.externalNonBrowserApplication);
-                            return NavigationActionPolicy.CANCEL;
-                          }
-                          return NavigationActionPolicy.ALLOW;
-                        },
-                        onLoadStop: (controller, url) async {
-                          pullToRefreshController?.endRefreshing();
-                          setState(() {
-                            this.url = url.toString();
-                            urlController.text = this.url;
-                          });
-                        },
-                        // onReceivedError: (controller, request, error) {
-                        //   pullToRefreshController?.endRefreshing();
-                        // },
-                        onProgressChanged: (controller, progress) {
-                          if (progress == 100) {
+          body:  isConnectionOk
+              ? SafeArea(
+                  child: Column(children: <Widget>[
+                  Expanded(
+                    child: Stack(
+                      children: [
+                      Container(
+                      width: MediaQuery.of(context).size.width,
+            height: MediaQuery.of(context).size.height,
+            color: Color.fromRGBO(28, 28, 34, 1),),
+                        InAppWebView(
+                          key: webViewKey,
+                          onPermissionRequest: (controller, origin) async {
+                            return PermissionResponse(
+                                action: PermissionResponseAction.GRANT);
+                          },
+                          initialUrlRequest: URLRequest(url: WebUri(url)),
+                          initialUserScripts:
+                              UnmodifiableListView<UserScript>([]),
+                          pullToRefreshController: pullToRefreshController,
+                          onWebViewCreated: (controller) async {
+                            webViewController = controller;
+                          },
+                          onLoadStart: (controller, url) async {
+                            setState(() {
+                              this.url = url.toString();
+                              urlController.text = this.url;
+                            });
+                          },
+                          shouldOverrideUrlLoading:
+                              (controller, navigationAction) async {
+                            final url = await controller.getUrl();
+                            final deepLink = navigationAction.request.url;
+                            if (deepLink != null &&
+                                url != navigationAction.request.url &&
+                                ((deepLink.scheme != 'https' &&
+                                        deepLink.scheme != 'http') ||
+                                    deepLink
+                                        .toString()
+                                        .contains("external=true") ||
+                                    containsMediaFormat(deepLink.toString()))) {
+                              launchUrl(deepLink,
+                                  mode:
+                                      LaunchMode.externalNonBrowserApplication);
+                              return NavigationActionPolicy.CANCEL;
+                            }
+                            return NavigationActionPolicy.ALLOW;
+                          },
+                          onLoadStop: (controller, url) async {
                             pullToRefreshController?.endRefreshing();
-                          }
-                          setState(() {
-                            this.progress = progress / 100;
-                            urlController.text = this.url;
-                          });
-                        },
-                        onUpdateVisitedHistory: (controller, url, isReload) {
-                          setState(() {
-                            this.url = url.toString();
-                            urlController.text = this.url;
-                          });
-                        },
-                        onConsoleMessage: (controller, consoleMessage) {
-                          print(consoleMessage);
-                        },
+                            setState(() {
+                              this.url = url.toString();
+                              urlController.text = this.url;
+                            });
+                          },
+                          // onReceivedError: (controller, request, error) {
+                          //   pullToRefreshController?.endRefreshing();
+                          // },
+                          onProgressChanged: (controller, progress) {
+                            if (progress == 100) {
+                              pullToRefreshController?.endRefreshing();
+                            }
+                            setState(() {
+                              this.progress = progress / 100;
+                              urlController.text = this.url;
+                            });
+                          },
+                          onUpdateVisitedHistory: (controller, url, isReload) {
+                            setState(() {
+                              this.url = url.toString();
+                              urlController.text = this.url;
+                            });
+                          },
+                          onConsoleMessage: (controller, consoleMessage) {
+                            print(consoleMessage);
+                          },
+                        ),
+                        progress < 1.0
+                            ? LinearProgressIndicator(value: progress)
+                            : Container(),
+                      ],
+                    ),
+                  ),
+                ]))
+              : Container(
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height,
+                  color: Color.fromRGBO(28, 28, 34, 1),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: isLoading ? [
+                      CupertinoActivityIndicator(color: Colors.white,),
+                      SizedBox(height:20),
+                      Text('در حال بررسی اینترنت شما',style: TextStyle(color: Colors.white,fontFamily: "yekan",fontSize: 16,fontWeight: FontWeight.bold),textDirection: TextDirection.rtl,textAlign: TextAlign.center,),
+
+                    ]
+                        :
+                      [
+                      Container(
+                      padding: EdgeInsets.all(5),
+            decoration: BoxDecoration(shape: BoxShape.circle,color: Colors.red.withOpacity(0.2),),
+                        child: Icon(
+                          Icons.close,
+                          color: Colors.red,
+                          size: 50,
+                        ),
                       ),
-                      progress < 1.0
-                          ? LinearProgressIndicator(value: progress)
-                          : Container(),
+                      SizedBox(height: 20,),
+                      Text(
+                          "دسترسی به اینترنت وجود ندارد!\n\nاگر به اینترنت متصل هستید و هنوز مشکل باقیست\nلطفا از فیلتر شکن استفاده کنید و مجدد تلاش کنید.",style: TextStyle(color: Colors.white,fontFamily: "yekan",fontSize: 16,fontWeight: FontWeight.bold),textDirection: TextDirection.rtl,textAlign: TextAlign.center,),
+                      SizedBox(height: 15,),
+                      ElevatedButton(
+                          onPressed: () async {
+                            if (!isLoading) await checkConnection();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            backgroundColor: Colors.red.shade100,
+                            // side: BorderSide(width: 2, color: Colors.red),
+                          ),
+                          child: Text("تلاش مجدد",style: TextStyle(fontFamily: "yekan",fontSize: 16,fontWeight: FontWeight.bold)))
                     ],
                   ),
-                ),
-
-              ]))),
+                )),
     );
   }
 }
-
